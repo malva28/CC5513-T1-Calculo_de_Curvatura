@@ -23,7 +23,16 @@ def angle(center: np.ndarray, p1: np.ndarray, p2: np.ndarray) -> float:
     return np.arccos(theta)
 
 
-def calculate_vertex_face_angles(mesh: openmesh.TriMesh) -> np.ndarray:
+def angle_sine(center_v: np.ndarray, p_r: np.ndarray, p_t: np.ndarray) -> float:
+    e_vt = p_t - center_v
+    e_vr = center_v - p_r
+    norm_e_vt = max(np.linalg.norm(e_vt), 1e-8)
+    norm_e_vr = max(np.linalg.norm(e_vr), 1e-8)
+    sin_theta = np.min((1.0, np.linalg.norm(np.cross(e_vt, e_vr))/(norm_e_vt*norm_e_vr)))
+    return np.arcsin(sin_theta)
+
+
+def calculate_vertex_face_angles(mesh: openmesh.TriMesh, method="cos") -> np.ndarray:
     empty_dicts = np.frompyfunc(lambda x: {}, 1, 1)
     vertex_angles = empty_dicts(np.zeros(mesh.n_vertices(), dtype=dict))
     for face in mesh.faces():
@@ -32,33 +41,42 @@ def calculate_vertex_face_angles(mesh: openmesh.TriMesh) -> np.ndarray:
         for i in range(3):
             i_prev = (i-1) % 3
             i_next = (i+1) % 3
-            vert_angle = angle(vertices[i], vertices[i_prev], vertices[i_next])
+            if method == "cos":
+                vert_angle = angle(vertices[i], vertices[i_prev], vertices[i_next])
+            elif method == "sin":
+                vert_angle = angle_sine(vertices[i], vertices[i_prev], vertices[i_next])
             vertex_angles[p_vertices[i].idx()][face.idx()] = vert_angle
     return vertex_angles
 
 
-def calculate_vertex_normals_by_angle(mesh: openmesh.TriMesh) -> np.ndarray:
+def calculate_vertex_normals_by_angle(mesh: openmesh.TriMesh, method: str = "cos") -> np.ndarray:
     face_normals = calculate_face_normals(mesh)
-    vertex_face_angles = calculate_vertex_face_angles(mesh)
+    vertex_face_angles = calculate_vertex_face_angles(mesh, method)
 
     vertex_normals = np.zeros((mesh.n_vertices(), 3))
 
     for vertex in mesh.vertices():
         i_v = vertex.idx()
         for face in mesh.vf(vertex):
-            vertex_normals[i_v,:] += face_normals[face.idx(), :] * vertex_face_angles[i_v][face.idx()]
-            vertex_normals[i_v,:] /= np.linalg.norm(vertex_normals[i_v,:])
+            vertex_normals[i_v, :] += face_normals[face.idx(), :] * vertex_face_angles[i_v][face.idx()]
+        vertex_normals[i_v, :] /= np.linalg.norm(vertex_normals[i_v,:])
+
+
 
     return vertex_normals
 
 
+if __name__ == "__main__":
+    pth = "data/esfera1.off"
+    mesh = openmesh.read_trimesh(pth)
 
-pth = "../../esfera/esfera1.off"
-mesh = openmesh.read_trimesh(pth)
-normales = calculate_face_normals(mesh)
+    normales = calculate_face_normals(mesh)
+    normales_vertices = calculate_vertex_normals_by_angle(mesh, method="cos")
 
-ps.init()
-ps_mesh = ps.register_surface_mesh("my mesh", mesh.points(), mesh.face_vertex_indices())
-ps.get_surface_mesh("my mesh").add_vector_quantity("face_normals", normales, defined_on='faces')
-ps.get_surface_mesh("my mesh").add_vector_quantity("vertex_normals", calculate_vertex_normals_by_angle(mesh))
-ps.show()
+    ps.init()
+    ps_mesh = ps.register_surface_mesh("my mesh", mesh.points(), mesh.face_vertex_indices())
+    ps.get_surface_mesh("my mesh").add_vector_quantity("face_normals", normales, defined_on='faces')
+    ps.get_surface_mesh("my mesh").add_vector_quantity(
+        "vertex_normals",
+        normales_vertices)
+    ps.show()
