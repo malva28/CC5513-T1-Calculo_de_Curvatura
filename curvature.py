@@ -1,8 +1,6 @@
-from normals import calculate_vertex_normals_by_angle
 import openmesh
 import numpy as np
-import polyscope as ps
-from normals import calculate_vertex_normals_by_angle, calculate_vertex_face_angles, angle_sine
+from normals import calculate_vertex_normals_by_angle, calculate_vertex_face_angles
 
 
 def calculate_curvature_o_edge_in_vertex_face(mesh: openmesh.TriMesh) -> np.ndarray:
@@ -35,6 +33,7 @@ def calculate_vertex_mean_curvature(mesh: openmesh.TriMesh) -> np.ndarray:
         for face in mesh.vf(vertex):
             vertex_curvatures[i_v] += curvature_outgoing_edge[i_v][face.idx()]
             n_faces += 1
+        n_faces = np.max((1e-8, n_faces))
         vertex_curvatures[i_v] = vertex_curvatures[i_v]/n_faces
 
     return vertex_curvatures
@@ -58,38 +57,7 @@ def calculate_vertex_angle_curvature(mesh: openmesh.TriMesh) -> np.ndarray:
 
             vertex_curvatures[i_v] += vertex_face_angle * curv_sum
             angle_sum += vertex_face_angle
+        angle_sum = np.max((angle_sum, 1e-8))
         vertex_curvatures[i_v] = vertex_curvatures[i_v] / (2*angle_sum)
 
     return vertex_curvatures
-
-
-if __name__ == "__main__":
-    pth = "data/cat10.off"
-    mesh = openmesh.read_trimesh(pth)
-    arr = calculate_curvature_o_edge_in_vertex_face(mesh)
-
-    face_curvature = np.zeros(mesh.n_faces())
-    for i in range(mesh.n_vertices()):
-        face_dict = arr[i]
-        face_keys = [key for key in face_dict]
-        for f_i in face_keys:
-            face_curvature[f_i] += face_dict[f_i]
-    face_curvature /= 3
-
-    #arr2 = calculate_vertex_mean_curvature(mesh)
-    arr2 = calculate_vertex_angle_curvature(mesh)
-
-    ps.init()
-    ps_mesh = ps.register_surface_mesh("my mesh", mesh.points(), mesh.face_vertex_indices())
-    ps.get_surface_mesh("my mesh").add_scalar_quantity("vertex_face_curvatures",
-                                                       face_curvature,
-                                                       defined_on="faces",
-                                                       enabled=True,
-                                                       cmap="viridis")
-    ps.get_surface_mesh("my mesh").add_scalar_quantity("vertex_mean_curvatures",
-                                                       arr2,
-                                                       defined_on="vertices",
-                                                       enabled=True,
-                                                       cmap="viridis",
-                                                       vminmax=np.percentile(arr2, [10, 90]))
-    ps.show()

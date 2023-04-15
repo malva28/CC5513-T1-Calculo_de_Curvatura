@@ -31,6 +31,13 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    print("===== PROCESSING FILE: {}=====".format(args.file))
+    print("args:\n\tweight = {}\n\tcmap = {}\n\tmin-perc = {}\n\tmax-perc = {}".format(
+        args.weight,
+        args.cmap,
+        args.min_perc,
+        args.max_perc))
+
     pth = args.file
     mesh = openmesh.read_trimesh(pth)
 
@@ -39,6 +46,14 @@ if __name__ == "__main__":
     elif args.weight == "angles":
         curvatures = calculate_vertex_angle_curvature(mesh)
 
+    print()
+    print("n_vertices = {} ,\tn_faces = {}".format(mesh.n_vertices(), mesh.n_faces()))
+    print("min_curvature = {} ,\tmax_curvature = {}".format(curvatures.min(), curvatures.max()))
+
+    perc_limits = np.percentile(curvatures, [args.min_perc, args.max_perc])
+
+    print("trunc_min_curvature = {} ,\ttrunc_max_curvature = {}".format(*perc_limits))
+
     ps.init()
     ps_mesh = ps.register_surface_mesh("my mesh", mesh.points(), mesh.face_vertex_indices())
     ps.get_surface_mesh("my mesh").add_scalar_quantity("vertex_mean_curvatures",
@@ -46,6 +61,5 @@ if __name__ == "__main__":
                                                        defined_on="vertices",
                                                        enabled=True,
                                                        cmap=args.cmap,
-                                                       vminmax=np.percentile(curvatures,
-                                                                             [args.min_perc, args.max_perc]))
+                                                       vminmax=perc_limits)
     ps.show()
